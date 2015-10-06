@@ -1,6 +1,6 @@
 /*
 ---------------------------------------
-|       TERRORBOT FIRMWARE v1.2       |                                                               12/2013
+|       TERRORBOT FIRMWARE v1.3       |                                                               12/2013
 ---------------------------------------
 
     TERRORBOT FOR ORANGE DARK TERROR HEAD
@@ -51,10 +51,12 @@
       --> HOLD BUTTON 1 AND 2 DURING STARTUP
              TO RESTORE VALUES FROM HIGHER EEPROM SLOTS
 
-    - GLOBAL VOLUME OFFSET
-      --> DOUBLE CLICK BUTTON 1 TO SET MASTER VOLUME
+    - GLOBAL OFFSET
+      --> DOUBLE CLICK BUTTON 1 WHILE IN EDITMODE 1 TO SET MASTER VOLUME
           -- HOLD BUTTON 2 AND 3 TO CHANGE
-          -- PRESS BUTTON 1 TO EXIT
+          -- PRESS BUTTON 1 TO SET SHAPE OFFSET
+          -- PRESS BUTTON 1 AGAIN TO SET GAIN OFFSET
+          -- PRESS BUTTON 1 AGAIN TO SAVE AND EXIT
           
     - FREEMODE
       --> HOLD BUTTON 1 THEN PRESS BUTTON 3 TO ENTER FREE MODE
@@ -85,6 +87,8 @@ const int VolumePin =                 9;
 const int ShapePin =                 10;
 const int GainPin =                  11;
 int masterOffset =                    0;
+int shapeOffset =                     0;
+int gainOffset =                      0;
 int volume;
 int shape;
 int gain;
@@ -97,8 +101,8 @@ int gainSpeed =                      27;
 int editSpeed =                     255;
 int volumeMin =                       7; // range of the servos
 int volumeMax =                     178;
-int shapeMin =                        2;
-int shapeMax =                      166;
+int shapeMin =                        3;
+int shapeMax =                      165;
 int gainMin =                         7;
 int gainMax =                       158;
 // -------------------------------------------------------------------------------------------------- BUTTONs
@@ -127,8 +131,8 @@ int volumeIndicator1 =               66;
 int volumeIndicator2 =              127;
 int volumeIndicator3 =              158;
 int shapeIndicator1 =                99;
-int shapeIndicator2 =               152;
-int shapeIndicator3 =               162;
+int shapeIndicator2 =               150;
+int shapeIndicator3 =               168;
 int gainIndicator1 =                 27;
 int gainIndicator2 =                 88;
 int gainIndicator3 =                127;
@@ -188,7 +192,24 @@ void setup() {
   volume = EEPROM.read(0);    // 400++ for last position --> eeprom killer
   shape  = EEPROM.read(1);
   gain =   EEPROM.read(2);
-  // masterOffset = EEPROM.read(99);
+  int m = EEPROM.read(94);
+  int mO = EEPROM.read(95);
+  if (m == 1)
+    masterOffset = mO;
+  else
+    masterOffset = -mO;    
+  int s = EEPROM.read(96);
+  int sO = EEPROM.read(97);
+  if (s == 1)
+    shapeOffset = sO;
+  else
+    shapeOffset = -sO;    
+  int g = EEPROM.read(98);
+  int gO = EEPROM.read(99);
+  if (g == 1)
+    gainOffset = gO;
+  else
+    gainOffset = -gO;    
   lastVolume = ((volume * 10) + 600);
   lastShape = ((shape * 10) + 600);
   lastGain = ((gain * 10) + 600);
@@ -255,11 +276,6 @@ int restoreBackup() {
     EEPROM.write((a-500), zz);
   }
   editState = 0;
-}
-// -------------------------------------------------------------------------------------------- MASTER VOLUME
-int masterVolume() {
-  editState = 700;
-  ledsOff();
 }
 // ------------------------------------------------------------------------------------------------- FREEMODE
 int freemode() {
@@ -336,8 +352,12 @@ int moveServos() {
   int v = volume + masterOffset;
   v = constrain(v, volumeMin, volumeMax);
   VolumeServo.slowmove(v,volumeSpeed);
-  ShapeServo.slowmove(shape,shapeSpeed);
-  GainServo.slowmove(gain,gainSpeed);
+  int s = shape + shapeOffset;
+  s = constrain(s, shapeMin, shapeMax);
+  ShapeServo.slowmove(s,shapeSpeed);
+  int g = gain + gainOffset;
+  g = constrain(g, gainMin, gainMax);
+  GainServo.slowmove(g,gainSpeed);
 //  EEPROM.write(400, volume);  // EEPROM KILLER
 //  EEPROM.write(401, shape);
 //  EEPROM.write(402, gain);
@@ -423,6 +443,33 @@ int indicator(int which, int marker1, int marker2, int marker3) {
     digitalWrite(ledPin[2], HIGH);
   else 
     digitalWrite(ledPin[2], LOW);
+}
+
+int offsetIndicator(int which, int ledpin) {
+  if (which < 0) {
+    digitalWrite(ledPin[0], HIGH);
+    digitalWrite(ledPin[1], HIGH);
+    digitalWrite(ledPin[2], LOW);
+    analogWrite(ledpin, which * -2.833333);
+  }
+  if (which == 0) {
+    digitalWrite(ledPin[0], HIGH);
+    digitalWrite(ledPin[1], HIGH);
+    digitalWrite(ledPin[2], HIGH);
+    blinker++;
+    if (blinker > 80)
+      blinker = 0;
+    if (blinker > 40 && blinker < 80)
+      analogWrite(ledpin, 0); 
+    else 
+      analogWrite(ledpin, 50);
+  }
+  if (which > 0) {
+    digitalWrite(ledPin[0], LOW);
+    digitalWrite(ledPin[1], HIGH);
+    digitalWrite(ledPin[2], HIGH);
+    analogWrite(ledpin, which * 2.833333);
+  }  
 }
 // ---------------------------------------------------- CHECK WHAT STATE IS SELECTED AND LIGHT THE RIGHT LEDs
 int ledStates() {
@@ -787,7 +834,7 @@ void loop() {
     if (button[i].clicks != 0) pressed[i] = button[i].clicks;
 // -------------------------------------------------------------------------------------- BUTTON1 SHORT CLICK
     if(pressed[0] == 1) {
-      if (editState > 0 && editState < 100)
+      if (editState > 0 && editState < 710)
         editState++;
 // ---------------------------------------------------------------------------------------------- NORMAL MODE
       if (editState == 0) {
@@ -908,11 +955,37 @@ void loop() {
         button[1].longClickTime  = longClickTime_default;
         button[2].longClickTime  = longClickTime_default;
         pressed [0] = 0;
-        break;
+        // break;
       }
-      if (editState == 700) {
-        // EEPROM.write(99, masterOffset);
+      if (editState == 701) {
+        if (masterOffset < 0) {
+          masterOffset = -masterOffset;
+          EEPROM.write(94, 0);
+        } else
+          EEPROM.write(94, 1);
+        EEPROM.write(95, masterOffset);
+        ledsOff();
+      }
+      if (editState == 702) {
+        if (shapeOffset < 0) {
+          shapeOffset = -shapeOffset;
+          EEPROM.write(96, 0);
+        } else
+          EEPROM.write(96, 1);
+        EEPROM.write(97, shapeOffset);
+        ledsOff();
+      }
+      if (editState == 703) {
+        if (gainOffset < 0) {
+          gainOffset = -gainOffset;
+          EEPROM.write(98, 0);
+        } else
+          EEPROM.write(98, 1);
+        EEPROM.write(99, gainOffset);
         editState = 0;
+        button[0].longClickTime  = longClickTime_default;
+        button[1].longClickTime  = longClickTime_default;
+        button[2].longClickTime  = longClickTime_default;
         ledStates();
         moveServos();
       }
@@ -1001,7 +1074,7 @@ void loop() {
     if(pressed[0] == -1) {
       if (editState == 0)
         edit();
-      if (editState > 1 && editState < 100) {    //  ----- move back in editmode
+      if (editState > 1 && editState < 710 && editState != 700) {    //  ----- move back in editmode
         editState--;
         if (editState == 1)
           analogWrite(G_PIN, 0); 
@@ -1014,7 +1087,12 @@ void loop() {
         if (editState == 4) 
           analogWrite(B_PIN, 0); 
         if (editState == 5) 
-          analogWrite(R_PIN, 0); 
+          analogWrite(R_PIN, 0);
+        if (editState == 700)
+          analogWrite(G_PIN, 0); 
+        if (editState == 701) 
+          analogWrite(B_PIN, 0); 
+          
       }
 // ------------------------------------------------------------------------------------------- CLICK AND HOLD
       if (editState == 999) {
@@ -1143,8 +1221,9 @@ void loop() {
     }
 // ------------------------------------------------------------------------------------- BUTTON1 DOUBLE CLICK
     if(pressed[0] == 2) {
-      if (editState == 0) {
-        masterVolume();
+      if (editState == 1) {
+        editState = 700;
+        ledsOff();
       }
       if (editState == 900) {
         state = oldState;
@@ -1240,7 +1319,9 @@ void loop() {
     shape = ease(shape, shapeMin, shapeMax, 27);   
     indicator(shape, shapeIndicator1, shapeIndicator2, shapeIndicator3);
     analogWrite(G_PIN, shape + shapeMin - 1);
-    ShapeServo.slowmove(shape,editSpeed);
+    int s = shape + shapeOffset;
+    s = constrain(s, shapeMin, shapeMax);
+    ShapeServo.slowmove(s,editSpeed);
 //Serial.println(shape);
   }
 // --------------------------------------------------------------------------------------------- EDIT STATE 3
@@ -1249,6 +1330,9 @@ void loop() {
     indicator(gain, gainIndicator1, gainIndicator2, gainIndicator3);
     analogWrite(B_PIN, gain + gainMin - 1);
     GainServo.slowmove(gain,editSpeed);
+    int g = gain + gainOffset;
+    g = constrain(g, gainMin, gainMax);
+    GainServo.slowmove(g,editSpeed);
 //Serial.println(gain);
   }
 // --------------------------------------------------------------------------------------------- EDIT STATE 4
@@ -1278,28 +1362,27 @@ void loop() {
 // ------------------------------------------------------------------------------------------- EDIT STATE 700
   if (editState == 700) { 
     masterOffset = ease(masterOffset, -90, 90, 27);   
-    if (masterOffset < 0) {
-      digitalWrite(ledPin[0], HIGH);
-      digitalWrite(ledPin[1], HIGH);
-      digitalWrite(ledPin[2], LOW);
-      analogWrite(R_PIN, masterOffset * -2.833333);
-    }
-    if (masterOffset == 0) {
-      digitalWrite(ledPin[0], HIGH);
-      digitalWrite(ledPin[1], HIGH);
-      digitalWrite(ledPin[2], HIGH);
-      analogWrite(R_PIN, 0);
-    }
-    if (masterOffset > 0) {
-      digitalWrite(ledPin[0], LOW);
-      digitalWrite(ledPin[1], HIGH);
-      digitalWrite(ledPin[2], HIGH);
-      analogWrite(R_PIN, masterOffset * 2.833333);
-    }
+    offsetIndicator(masterOffset, R_PIN);
     int v = volume + masterOffset;
     v = constrain(v, volumeMin, volumeMax);
     VolumeServo.slowmove(v,editSpeed);
 // Serial.println(masterOffset);
+  }
+// ------------------------------------------------------------------------------------------- EDIT STATE 701
+  if (editState == 701) { 
+    shapeOffset = ease(shapeOffset, -90, 90, 27);   
+    offsetIndicator(shapeOffset, G_PIN);
+    int s = shape + shapeOffset;
+    s = constrain(s, shapeMin, shapeMax);
+    ShapeServo.slowmove(s,editSpeed);
+  }
+// ------------------------------------------------------------------------------------------- EDIT STATE 702
+  if (editState == 702) { 
+    gainOffset = ease(gainOffset, -90, 90, 27);   
+    offsetIndicator(gainOffset, B_PIN);
+    int g = gain + gainOffset;
+    g = constrain(g, gainMin, gainMax);
+    GainServo.slowmove(g,editSpeed);
   }
 // ----------------------------------------------------------------------------- EDIT STATE 900 - COPY PRESET
   if (editState == 900) {
