@@ -1,6 +1,6 @@
 /*
 ---------------------------------------
-|       TERRORBOT FIRMWARE v1.1       |                                                               12/2013
+|       TERRORBOT FIRMWARE v1.2       |                                                               12/2013
 ---------------------------------------
 
     TERRORBOT FOR ORANGE DARK TERROR HEAD
@@ -27,7 +27,7 @@
              - BUTTON LEDs WILL INDICATE THE HEIGH OF THE VALUE
           -- SINGLE CLICK ON BUTTON 1 WILL JUMP TO THE NEXT STATE
           -- LONG CLICK BUTTON 1 WILL JUMP TO PREVIOUS STATE
-          -- DOUBLE CLICK BUTTON 1 WILL EXIT WITHOUT SAVING
+          -- TRIPPLE CLICK BUTTON 1 WILL EXIT WITHOUT SAVING
           -- STATES:
              -STATE-1: POSITION VOLUME
              -STATE-2: POSITION SHAPE
@@ -57,7 +57,7 @@
           -- PRESS BUTTON 1 TO EXIT
           
     - FREEMODE
-      --> DOUBLE CLICK BUTTON 2 TO ENTER FREE MODE
+      --> HOLD BUTTON 1 THEN PRESS BUTTON 3 TO ENTER FREE MODE
           -- CONTROLL EACH SERVO WITH A SINGLE BUTTON
            - PRESS AND HOLD BUTTON 1 WILL CHANGE VOLUME
            - PRESS AND HOLD BUTTON 2 WILL CHANGE SHAPE
@@ -67,7 +67,7 @@
              --> STATE WILL BE SAVED TO PRESET 12 ON EXIT
 
     - METRONOME
-      --> DOUBLE CLICK BUTTON 3 TO ACTIVATE
+      --> HOLD BUTTON 3 THEN PRESS BUTTON 1 TO ACTIVATE
           -- HOLD BUTTON 2 AND 3 TO CHANGE SPEED
           -- PRESS BUTTON 1 TO EXIT
           
@@ -98,7 +98,7 @@ int editSpeed =                     255;
 int volumeMin =                       7; // range of the servos
 int volumeMax =                     178;
 int shapeMin =                        2;
-int shapeMax =                      168;
+int shapeMax =                      166;
 int gainMin =                         7;
 int gainMax =                       158;
 // -------------------------------------------------------------------------------------------------- BUTTONs
@@ -137,7 +137,7 @@ int servoSpeedsIndicator2 =         127;
 int servoSpeedsIndicator3 =         172;
 // ----------------------------------------------------------------------------------------------------- VARs
 int DELAY =                          10;  // Delay per loop in ms
-float easeFreemode =                 50;  // Free Mode Servospeed factor
+float easeFreemode =                 35;  // Free Mode Servospeed factor
 int editState =                       0;
 int bank =                            1;
 int state =                           1;
@@ -188,7 +188,7 @@ void setup() {
   volume = EEPROM.read(0);    // 400++ for last position --> eeprom killer
   shape  = EEPROM.read(1);
   gain =   EEPROM.read(2);
-  masterOffset = EEPROM.read(99);
+  // masterOffset = EEPROM.read(99);
   lastVolume = ((volume * 10) + 600);
   lastShape = ((shape * 10) + 600);
   lastGain = ((gain * 10) + 600);
@@ -279,6 +279,8 @@ int freemode() {
 }
 // ------------------------------------------------------------------------------------------------ METRONOME
 int metronome() {
+  pressed[0] = 0;
+  delay (200);
   editState = 998;
   ledsOff();
   int counter = 0;
@@ -909,7 +911,7 @@ void loop() {
         break;
       }
       if (editState == 700) {
-        EEPROM.write(99, masterOffset);
+        // EEPROM.write(99, masterOffset);
         editState = 0;
         ledStates();
         moveServos();
@@ -1032,7 +1034,7 @@ void loop() {
               volume--;
               delay(d);
             }
-            x = x + sqrt(x)/2;
+            x = x + sqrt(x)/3;
             y = easeFreemode;
           } 
           volume = constrain(volume, volumeMin, volumeMax);
@@ -1056,7 +1058,7 @@ void loop() {
         if (bank < 1)
           bank = 4;
         ledStates();
-        if (bank == 2)
+        if (bank == 3)   //for nolags test
           delay(500);
       } 
 // ------------------------------------------------------------------------------------------- CLICK AND HOLD
@@ -1077,7 +1079,7 @@ void loop() {
               shape--;
               delay(d);
             }
-            x = x + sqrt(x)/2;
+            x = x + sqrt(x)/3;
             y = easeFreemode;
           } 
           shape = constrain(shape, shapeMin, shapeMax);
@@ -1101,7 +1103,7 @@ void loop() {
         if (bank > 4)
           bank = 1;
         ledStates();
-        if (bank == 2)
+        if (bank == 3)   //for nolags test
           delay(500);
       }
 // ------------------------------------------------------------------------------------------- CLICK AND HOLD
@@ -1122,7 +1124,7 @@ void loop() {
               gain--;
               delay(d);
             }
-            x = x + sqrt(x)/2;
+            x = x + sqrt(x)/3;
             y = easeFreemode;
           } 
           gain = constrain(gain, gainMin, gainMax);
@@ -1144,13 +1146,6 @@ void loop() {
       if (editState == 0) {
         masterVolume();
       }
-      if (editState >0 && editState < 100) {
-        editState = 0;
-        ledStates();
-        button[0].longClickTime  = longClickTime_default;
-        button[1].longClickTime  = longClickTime_default;
-        button[2].longClickTime  = longClickTime_default;
-      }
       if (editState == 900) {
         state = oldState;
         ledStates();
@@ -1160,9 +1155,6 @@ void loop() {
     }
 // ------------------------------------------------------------------------------------- BUTTON2 DOUBLE CLICK
     if(pressed[1] == 2) {
-      if (editState == 0) {
-        freemode();
-      }
        if (editState == 900) {
         state = oldState;
         ledStates();
@@ -1172,9 +1164,6 @@ void loop() {
     }
 // ------------------------------------------------------------------------------------- BUTTON3 DOUBLE CLICK
     if(pressed[2] == 2) {
-      if (editState == 0) {
-        metronome();
-      }
       if (editState == 900) {
         state = oldState;
         ledStates();
@@ -1188,6 +1177,13 @@ void loop() {
         oldState = state;
         loadBtn1();         
         copyPreset();
+      }
+      if (editState >0 && editState < 100) {
+        editState = 0;
+        ledStates();
+        button[0].longClickTime  = longClickTime_default;
+        button[1].longClickTime  = longClickTime_default;
+        button[2].longClickTime  = longClickTime_default;
       }
       if (editState == 999) {
         EEPROM.write(33, volume);
@@ -1234,7 +1230,9 @@ void loop() {
     volume = ease(volume,volumeMin, volumeMax, 27);   
     indicator(volume, volumeIndicator1, volumeIndicator2, volumeIndicator3);
     analogWrite(R_PIN, volume + volumeMin - 1);
-    VolumeServo.slowmove(volume,editSpeed);
+    int v = volume + masterOffset;
+    v = constrain(v, volumeMin, volumeMax);
+    VolumeServo.slowmove(v,editSpeed);
 //Serial.println(volume);
   }
 // --------------------------------------------------------------------------------------------- EDIT STATE 2
@@ -1301,7 +1299,7 @@ void loop() {
     int v = volume + masterOffset;
     v = constrain(v, volumeMin, volumeMax);
     VolumeServo.slowmove(v,editSpeed);
-Serial.println(masterOffset);
+// Serial.println(masterOffset);
   }
 // ----------------------------------------------------------------------------- EDIT STATE 900 - COPY PRESET
   if (editState == 900) {
@@ -1310,17 +1308,26 @@ Serial.println(masterOffset);
   }
 // ----------------------------------------------------------------------------------------------------------
 
+// ------------------------------------------------------------------------------ ENTER FREEMODE OR METRONOME
+   if (button[0].depressed == true && button[2].depressed == false){  // press left button first
+     if (!digitalRead(buttonPin3))                                    // then right button
+       freemode();
+   }
+   if (button[2].depressed == true && button[0].depressed == false){
+     if (!digitalRead(buttonPin1))
+       metronome();
+   }
 // ---------------------------------------------------------------------------------------------- NO LAG TEST
   if (!digitalRead(buttonPin1)) {
     if (editState == 0) {
-      if (bank == 2) {
-        volume = EEPROM.read(9);
-        shape  = EEPROM.read(10);
-        gain = EEPROM.read(11);
-        volumeSpeed = EEPROM.read(209);
-        shapeSpeed = EEPROM.read(210);
-        gainSpeed = EEPROM.read(211);
-        state = 4;
+      if (bank == 3) {
+        volume = EEPROM.read(18);
+        shape  = EEPROM.read(19);
+        gain = EEPROM.read(20);
+        volumeSpeed = EEPROM.read(218);
+        shapeSpeed = EEPROM.read(219);
+        gainSpeed = EEPROM.read(220);
+        state = 7;
         ledStates();
         moveServos();
       }
@@ -1328,14 +1335,14 @@ Serial.println(masterOffset);
   }
   if (!digitalRead(buttonPin2)) {
     if (editState == 0) {
-      if (bank == 2) {
-        volume = EEPROM.read(12);
-        shape  = EEPROM.read(13);
-        gain = EEPROM.read(14);
-        volumeSpeed = EEPROM.read(212);
-        shapeSpeed = EEPROM.read(213);
-        gainSpeed = EEPROM.read(214);
-        state = 5;
+      if (bank == 3) {
+        volume = EEPROM.read(21);
+        shape  = EEPROM.read(22);
+        gain = EEPROM.read(23);
+        volumeSpeed = EEPROM.read(221);
+        shapeSpeed = EEPROM.read(222);
+        gainSpeed = EEPROM.read(223);
+        state = 8;
         ledStates();
         moveServos();
       }
@@ -1343,14 +1350,14 @@ Serial.println(masterOffset);
   }
   if (!digitalRead(buttonPin3)) {
     if (editState == 0) {
-      if (bank == 2) {
-        volume = EEPROM.read(15);
-        shape  = EEPROM.read(16);
-        gain = EEPROM.read(17);
-        volumeSpeed = EEPROM.read(215);
-        shapeSpeed = EEPROM.read(216);
-        gainSpeed = EEPROM.read(217);
-        state = 6;
+      if (bank == 3) {
+        volume = EEPROM.read(24);
+        shape  = EEPROM.read(25);
+        gain = EEPROM.read(26);
+        volumeSpeed = EEPROM.read(224);
+        shapeSpeed = EEPROM.read(225);
+        gainSpeed = EEPROM.read(226);
+        state = 9;
         ledStates();
         moveServos();
       }
