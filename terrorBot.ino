@@ -1,6 +1,6 @@
 /*
 ---------------------------------------
-|       TERRORBOT FIRMWARE v1.0       |                                                               12/2013
+|       TERRORBOT FIRMWARE v1.1       |                                                               12/2013
 ---------------------------------------
 
     TERRORBOT FOR ORANGE DARK TERROR HEAD
@@ -51,6 +51,11 @@
       --> HOLD BUTTON 1 AND 2 DURING STARTUP
              TO RESTORE VALUES FROM HIGHER EEPROM SLOTS
 
+    - GLOBAL VOLUME OFFSET
+      --> DOUBLE CLICK BUTTON 1 TO SET MASTER VOLUME
+          -- HOLD BUTTON 2 AND 3 TO CHANGE
+          -- PRESS BUTTON 1 TO EXIT
+          
     - FREEMODE
       --> DOUBLE CLICK BUTTON 2 TO ENTER FREE MODE
           -- CONTROLL EACH SERVO WITH A SINGLE BUTTON
@@ -65,7 +70,7 @@
       --> DOUBLE CLICK BUTTON 3 TO ACTIVATE
           -- HOLD BUTTON 2 AND 3 TO CHANGE SPEED
           -- PRESS BUTTON 1 TO EXIT
-
+          
 -------------------------------------------------------------------------------------------------------------
 */
 #include <VarSpeedServo.h>
@@ -79,6 +84,7 @@ VarSpeedServo GainServo;
 const int VolumePin =                 9;
 const int ShapePin =                 10;
 const int GainPin =                  11;
+int masterOffset =                    0;
 int volume;
 int shape;
 int gain;
@@ -131,7 +137,7 @@ int servoSpeedsIndicator2 =         127;
 int servoSpeedsIndicator3 =         172;
 // ----------------------------------------------------------------------------------------------------- VARs
 int DELAY =                          10;  // Delay per loop in ms
-float easeFreemode =                 31;  // Free Mode Servospeed factor
+float easeFreemode =                 50;  // Free Mode Servospeed factor
 int editState =                       0;
 int bank =                            1;
 int state =                           1;
@@ -153,7 +159,7 @@ void setup() {
   Serial.begin(9600);
   for (int i=0; i<buttons; i++) {
     pinMode(ledPin[i],OUTPUT);  
-    button[i].debounceTime   = 20;   // Debounce timer in ms
+    button[i].debounceTime   = 7;   // Debounce timer in ms
     button[i].multiclickTime = 250;  // Time limit for multi clicks
     button[i].longClickTime  = longClickTime_default; // Time until long clicks register
   }
@@ -182,6 +188,7 @@ void setup() {
   volume = EEPROM.read(0);    // 400++ for last position --> eeprom killer
   shape  = EEPROM.read(1);
   gain =   EEPROM.read(2);
+  masterOffset = EEPROM.read(99);
   lastVolume = ((volume * 10) + 600);
   lastShape = ((shape * 10) + 600);
   lastGain = ((gain * 10) + 600);
@@ -249,6 +256,27 @@ int restoreBackup() {
   }
   editState = 0;
 }
+// -------------------------------------------------------------------------------------------- MASTER VOLUME
+int masterVolume() {
+  editState = 700;
+  ledsOff();
+}
+// ------------------------------------------------------------------------------------------------- FREEMODE
+int freemode() {
+  editState = 999;
+  ledsOff();
+  blinkButton(R_PIN);
+  blinkButton(ledPin[0]);
+  delay(300);
+  blinkButton(G_PIN);
+  blinkButton(ledPin[1]);
+  delay(300);
+  blinkButton(B_PIN);
+  blinkButton(ledPin[2]);
+  button[0].longClickTime  = 271;
+  button[1].longClickTime  = 271;
+  button[2].longClickTime  = 271;
+}
 // ------------------------------------------------------------------------------------------------ METRONOME
 int metronome() {
   editState = 998;
@@ -300,26 +328,12 @@ int metronome() {
   ledStates();
   delay(721);
 }
-// ------------------------------------------------------------------------------------------------- FREEMODE
-int freemode() {
-  editState = 999;
-  ledsOff();
-  blinkButton(R_PIN);
-  blinkButton(ledPin[0]);
-  delay(300);
-  blinkButton(G_PIN);
-  blinkButton(ledPin[1]);
-  delay(300);
-  blinkButton(B_PIN);
-  blinkButton(ledPin[2]);
-  button[0].longClickTime  = 172;
-  button[1].longClickTime  = 172;
-  button[2].longClickTime  = 172;
-}
 // ----------------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------- MOVE ALL SERVOS INTO POSITION
 int moveServos() {
-  VolumeServo.slowmove(volume,volumeSpeed);
+  int v = volume + masterOffset;
+  v = constrain(v, volumeMin, volumeMax);
+  VolumeServo.slowmove(v,volumeSpeed);
   ShapeServo.slowmove(shape,shapeSpeed);
   GainServo.slowmove(gain,gainSpeed);
 //  EEPROM.write(400, volume);  // EEPROM KILLER
@@ -894,6 +908,12 @@ void loop() {
         pressed [0] = 0;
         break;
       }
+      if (editState == 700) {
+        EEPROM.write(99, masterOffset);
+        editState = 0;
+        ledStates();
+        moveServos();
+      }
       if (editState == 900) {
         switch (bank) {
           case 1: state = 1;   break;
@@ -1036,6 +1056,8 @@ void loop() {
         if (bank < 1)
           bank = 4;
         ledStates();
+        if (bank == 2)
+          delay(500);
       } 
 // ------------------------------------------------------------------------------------------- CLICK AND HOLD
       if (editState == 999) {
@@ -1045,8 +1067,8 @@ void loop() {
         while(button[1].depressed == true){
           button[1].Update();
           y = y - x;
-          d = easeFreemode - sqrt(x)/2;
-          d = constrain (d, 1, easeFreemode);
+          d = (1.5 * easeFreemode) - sqrt(x);
+          d = constrain (d, 1, (1.5 * easeFreemode));
           if (y < 0) {
             if (DirectionShape) {
               shape++;
@@ -1079,6 +1101,8 @@ void loop() {
         if (bank > 4)
           bank = 1;
         ledStates();
+        if (bank == 2)
+          delay(500);
       }
 // ------------------------------------------------------------------------------------------- CLICK AND HOLD
       if (editState == 999) {
@@ -1117,6 +1141,9 @@ void loop() {
     }
 // ------------------------------------------------------------------------------------- BUTTON1 DOUBLE CLICK
     if(pressed[0] == 2) {
+      if (editState == 0) {
+        masterVolume();
+      }
       if (editState >0 && editState < 100) {
         editState = 0;
         ledStates();
@@ -1250,12 +1277,85 @@ void loop() {
     analogWrite(B_PIN, gainSpeed);
     analogWrite(G_PIN, gainSpeed);
   }
+// ------------------------------------------------------------------------------------------- EDIT STATE 700
+  if (editState == 700) { 
+    masterOffset = ease(masterOffset, -90, 90, 27);   
+    if (masterOffset < 0) {
+      digitalWrite(ledPin[0], HIGH);
+      digitalWrite(ledPin[1], HIGH);
+      digitalWrite(ledPin[2], LOW);
+      analogWrite(R_PIN, masterOffset * -2.833333);
+    }
+    if (masterOffset == 0) {
+      digitalWrite(ledPin[0], HIGH);
+      digitalWrite(ledPin[1], HIGH);
+      digitalWrite(ledPin[2], HIGH);
+      analogWrite(R_PIN, 0);
+    }
+    if (masterOffset > 0) {
+      digitalWrite(ledPin[0], LOW);
+      digitalWrite(ledPin[1], HIGH);
+      digitalWrite(ledPin[2], HIGH);
+      analogWrite(R_PIN, masterOffset * 2.833333);
+    }
+    int v = volume + masterOffset;
+    v = constrain(v, volumeMin, volumeMax);
+    VolumeServo.slowmove(v,editSpeed);
+Serial.println(masterOffset);
+  }
 // ----------------------------------------------------------------------------- EDIT STATE 900 - COPY PRESET
   if (editState == 900) {
     blinkAllButtons();
     delay(DELAY);
   }
 // ----------------------------------------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------------------------- NO LAG TEST
+  if (!digitalRead(buttonPin1)) {
+    if (editState == 0) {
+      if (bank == 2) {
+        volume = EEPROM.read(9);
+        shape  = EEPROM.read(10);
+        gain = EEPROM.read(11);
+        volumeSpeed = EEPROM.read(209);
+        shapeSpeed = EEPROM.read(210);
+        gainSpeed = EEPROM.read(211);
+        state = 4;
+        ledStates();
+        moveServos();
+      }
+    }
+  }
+  if (!digitalRead(buttonPin2)) {
+    if (editState == 0) {
+      if (bank == 2) {
+        volume = EEPROM.read(12);
+        shape  = EEPROM.read(13);
+        gain = EEPROM.read(14);
+        volumeSpeed = EEPROM.read(212);
+        shapeSpeed = EEPROM.read(213);
+        gainSpeed = EEPROM.read(214);
+        state = 5;
+        ledStates();
+        moveServos();
+      }
+    }
+  }
+  if (!digitalRead(buttonPin3)) {
+    if (editState == 0) {
+      if (bank == 2) {
+        volume = EEPROM.read(15);
+        shape  = EEPROM.read(16);
+        gain = EEPROM.read(17);
+        volumeSpeed = EEPROM.read(215);
+        shapeSpeed = EEPROM.read(216);
+        gainSpeed = EEPROM.read(217);
+        state = 6;
+        ledStates();
+        moveServos();
+      }
+    }
+  }
 // ----------------------------------------------- END OF LOOP  
   delay(DELAY);
 }
