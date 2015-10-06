@@ -1,6 +1,6 @@
 /*
 ---------------------------------------
-|       TERRORBOT FIRMWARE v1.3       |                                                               12/2013
+|       TERRORBOT FIRMWARE v1.4       |                                                               01/2014
 ---------------------------------------
 
     TERRORBOT FOR ORANGE DARK TERROR HEAD
@@ -40,7 +40,8 @@
              -STATE-7: SAVE AND EXIT
 
     - COPY PRESET TO ANOTHER SLOT
-      --> TRIPPLE CLICK ON DESIRED PRESET WILL LAUNCH NEW SLOT SELECTOR
+      --> LOAD PRESET YOU WANT TO COPY AND ENTER EDITMODE
+          -- TRIPPLE CLICK ON BUTTON 3 WHILE IN EDITSTATE 1 WILL LAUNCH NEW SLOT SELECTOR
           -- DOUBLE CLICK ON ANY BUTTON TO CANCEL
           -- IF NO BUTTON IS PRESSED FOR 5 SECONDS SELECTOR WILL BE CANCELED
 
@@ -59,12 +60,12 @@
           -- PRESS BUTTON 1 AGAIN TO SAVE AND EXIT
           
     - FREEMODE
-      --> HOLD BUTTON 1 THEN PRESS BUTTON 3 TO ENTER FREE MODE
+      --> TRIPPLE CLICK ON DESIRED PRESET TO OPEN IT IN FREEMODE
           -- CONTROLL EACH SERVO WITH A SINGLE BUTTON
            - PRESS AND HOLD BUTTON 1 WILL CHANGE VOLUME
            - PRESS AND HOLD BUTTON 2 WILL CHANGE SHAPE
            - PRESS AND HOLD BUTTON 3 WILL CHANGE GAIN
-           - SINGLE CLICK CHANGES EACH DIRECTION
+           - SINGLE CLICK CHANGES EACH DIRECTION (LED ON = INCREASE VALUE)
            - TRIPPLE CLICK BUTTON 1 TO EXIT
              --> STATE WILL BE SAVED TO PRESET 12 ON EXIT
 
@@ -100,8 +101,8 @@ int shapeSpeed =                     27;
 int gainSpeed =                      27;
 int editSpeed =                     255;
 int volumeMin =                       7; // range of the servos
-int volumeMax =                     178;
-int shapeMin =                        3;
+int volumeMax =                     174;
+int shapeMin =                        4;
 int shapeMax =                      165;
 int gainMin =                         7;
 int gainMax =                       158;
@@ -132,7 +133,7 @@ int volumeIndicator2 =              127;
 int volumeIndicator3 =              158;
 int shapeIndicator1 =                99;
 int shapeIndicator2 =               150;
-int shapeIndicator3 =               168;
+int shapeIndicator3 =               161;
 int gainIndicator1 =                 27;
 int gainIndicator2 =                 88;
 int gainIndicator3 =                127;
@@ -279,16 +280,11 @@ int restoreBackup() {
 }
 // ------------------------------------------------------------------------------------------------- FREEMODE
 int freemode() {
-  editState = 999;
   ledsOff();
-  blinkButton(R_PIN);
-  blinkButton(ledPin[0]);
-  delay(300);
-  blinkButton(G_PIN);
-  blinkButton(ledPin[1]);
-  delay(300);
   blinkButton(B_PIN);
-  blinkButton(ledPin[2]);
+  delay(200);
+  blinkButton(B_PIN);
+  editState = 998;   // avoid tripple click to exit is also triggered
   button[0].longClickTime  = 271;
   button[1].longClickTime  = 271;
   button[2].longClickTime  = 271;
@@ -713,6 +709,9 @@ int copyPreset() {
    timer++;
     if (timer == 400) {
       state = oldState;
+      button[0].longClickTime  = longClickTime_default;
+      button[1].longClickTime  = longClickTime_default;
+      button[2].longClickTime  = longClickTime_default;
       editState = 0;
       ledStates();
       timer = 0;
@@ -959,33 +958,40 @@ void loop() {
       }
       if (editState == 701) {
         if (masterOffset < 0) {
-          masterOffset = -masterOffset;
           EEPROM.write(94, 0);
-        } else
+          int m = -masterOffset;
+          EEPROM.write(95, m);
+        } else {
           EEPROM.write(94, 1);
-        EEPROM.write(95, masterOffset);
+          int m = masterOffset;
+          EEPROM.write(95, m);
+        }
         ledsOff();
       }
       if (editState == 702) {
         if (shapeOffset < 0) {
-          shapeOffset = -shapeOffset;
           EEPROM.write(96, 0);
-        } else
+          int s = -shapeOffset;
+          EEPROM.write(97, s);
+        } else {
           EEPROM.write(96, 1);
-        EEPROM.write(97, shapeOffset);
+          int s = shapeOffset;
+          EEPROM.write(97, s);
+        }        
         ledsOff();
       }
       if (editState == 703) {
         if (gainOffset < 0) {
-          gainOffset = -gainOffset;
           EEPROM.write(98, 0);
-        } else
+        } else {
           EEPROM.write(98, 1);
-        EEPROM.write(99, gainOffset);
-        editState = 0;
+          int g = gainOffset;
+          EEPROM.write(99, g);
+        }
         button[0].longClickTime  = longClickTime_default;
         button[1].longClickTime  = longClickTime_default;
         button[2].longClickTime  = longClickTime_default;
+        editState = 0;
         ledStates();
         moveServos();
       }
@@ -1000,6 +1006,9 @@ void loop() {
         ledStates();
         moveServos();  
         editState = 0;
+        button[0].longClickTime  = longClickTime_default;
+        button[1].longClickTime  = longClickTime_default;
+        button[2].longClickTime  = longClickTime_default;
       }
       if (editState == 999) {
         if (DirectionVolume == true)
@@ -1030,6 +1039,9 @@ void loop() {
         ledStates();
         moveServos();  
         editState = 0;
+        button[0].longClickTime  = longClickTime_default;
+        button[1].longClickTime  = longClickTime_default;
+        button[2].longClickTime  = longClickTime_default;
       }
       if (editState == 999) {
         if (DirectionShape == true)
@@ -1060,6 +1072,9 @@ void loop() {
         ledStates();
         moveServos();  
         editState = 0;
+        button[0].longClickTime  = longClickTime_default;
+        button[1].longClickTime  = longClickTime_default;
+        button[2].longClickTime  = longClickTime_default;
       }
       if (editState == 999) {
         if (DirectionGain == true) 
@@ -1253,9 +1268,9 @@ void loop() {
 // ------------------------------------------------------------------------------------ BUTTON1 TRIPPLE CLICK
     if(pressed[0] == 3) {
       if (editState == 0) {
-        oldState = state;
-        loadBtn1();         
-        copyPreset();
+        loadBtn1();
+        moveServos(); 
+        freemode();
       }
       if (editState >0 && editState < 100) {
         editState = 0;
@@ -1265,38 +1280,46 @@ void loop() {
         button[2].longClickTime  = longClickTime_default;
       }
       if (editState == 999) {
+        ledsOff();
         EEPROM.write(33, volume);
         EEPROM.write(34, shape);
         EEPROM.write(35, gain);
         EEPROM.write(233, volumeSpeed);
         EEPROM.write(234, shapeSpeed);
         EEPROM.write(235, gainSpeed);
+        delay(500);
         editState = 0;
-        state = 12;
-        bank = 4;
+     //   state = 12;
+     //   bank = 4;
         ledStates();
         moveServos();
         button[0].longClickTime  = longClickTime_default;
         button[1].longClickTime  = longClickTime_default;
         button[2].longClickTime  = longClickTime_default;
-        delay(721);
+        DirectionVolume = true;
+        DirectionShape = true;
+        DirectionGain = true;
       }
       pressed[0] = 0;
     }
 // ------------------------------------------------------------------------------------ BUTTON2 TRIPPLE CLICK
     if(pressed[1] == 3) {
       if (editState == 0) {
-        oldState = state;
         loadBtn2();
-        copyPreset();            
+        moveServos();
+        freemode();            
       }
       pressed[1] = 0;
     }
 // ------------------------------------------------------------------------------------ BUTTON3 TRIPPLE CLICK
     if(pressed[2] == 3) {
       if (editState == 0) {
-        oldState = state;
         loadBtn3();
+        moveServos();
+        freemode();
+      }
+      if (editState == 1) {
+        oldState = state;
         copyPreset();
       }
       pressed[2] = 0;
@@ -1389,13 +1412,31 @@ void loop() {
     blinkAllButtons();
     delay(DELAY);
   }
+// -------------------------------------------------------------------------------- EDIT STATE 999 - FREEMODE
+  if (editState == 998)
+    editState++;   // avoid tripple click to exit is also triggered
+  if (editState == 999) {
+    if (DirectionVolume == true)
+      digitalWrite(ledPin[0], HIGH); 
+    else  
+      digitalWrite(ledPin[0], LOW); 
+    if (DirectionShape == true)
+      digitalWrite(ledPin[1], HIGH);   
+    else  
+      digitalWrite(ledPin[1], LOW); 
+    if (DirectionGain == true)
+      digitalWrite(ledPin[2], HIGH);   
+    else  
+      digitalWrite(ledPin[2], LOW); 
+  }
 // ----------------------------------------------------------------------------------------------------------
 
 // ------------------------------------------------------------------------------ ENTER FREEMODE OR METRONOME
-   if (button[0].depressed == true && button[2].depressed == false){  // press left button first
+/*   if (button[0].depressed == true && button[2].depressed == false){  // press left button first
      if (!digitalRead(buttonPin3))                                    // then right button
        freemode();
    }
+*/
    if (button[2].depressed == true && button[0].depressed == false){
      if (!digitalRead(buttonPin1))
        metronome();
