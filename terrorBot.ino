@@ -1,27 +1,36 @@
 /*
 ---------------------------------------
-|       TERRORBOT FIRMWARE v1.4       |                                                               01/2014
+|       TERRORBOT FIRMWARE v1.5       |                                                               05/2016
 ---------------------------------------
 
     TERRORBOT FOR ORANGE DARK TERROR HEAD
-    
-    copyright Michael Karsay 2013
+     
+    copyright Michael Karsay 2013 - 2016
     http://beam.to/terrorBot
     
     You may use and/or modify this code for personal use.
     If you want to publish modified versions of this code,
     keep the header with my name and homepage intact and give me proper credits.   
     Feel free to contact me if you need other agreements.
-    
+
     FEATURING:
     ----------
     
     - INDIVIDUAL SERVO SPEEDs
 
     - 12 PRESET SLOTS IN 4 BANKS
-      --> LONGPRESS BUTTON 2 & 3 WILL CHANGE BANK
+      --> DOUBLE LONGPRESS BUTTON 2 & 3 WILL CHANGE BANK
+      
+    - NO LAG EVENTS (BYPASSED CLICKBUTTON LIBRARY)
+      --> ALLOW IMEDIATE BUTTON RESPONSE WHILE SWITCHING PRESETS FROM BTN3 TO BTN2 AND BACK IN BANK 3 + 4 
 
-    - EDIT MODE
+    - VOLUME AND GAIN BOOST
+      --> LONGPRESS BUTTON 2 WILL BOOST VOLUME
+      --> LONGPRESS BUTTON 3 WILL BOOST GAIN
+        --> DOUBLE CLICK BUTTON 2 WHILE IN EDITMODE TO SET VOLUME VALUES (BOOST-AMMOUNT + SPEED)
+        --> DOUBLE CLICK BUTTON 3 WHILE IN EDITMODE TO SET GAIN VALUES (BOOST-AMMOUNT + SPEED)
+ 
+     - EDIT MODE
       --> LONGPRESS BUTTON 1 WILL GO TO EDIT MODE FOR ACTIVE PRESET
           -- BUTTON 2 AND 3 WILL CHANGE THE VALUE UP AND DOWN
              - BUTTON LEDs WILL INDICATE THE HEIGH OF THE VALUE
@@ -66,11 +75,11 @@
            - PRESS AND HOLD BUTTON 2 WILL CHANGE SHAPE
            - PRESS AND HOLD BUTTON 3 WILL CHANGE GAIN
            - SINGLE CLICK CHANGES EACH DIRECTION (LED ON = INCREASE VALUE)
-           - TRIPPLE CLICK BUTTON 1 TO EXIT
-             --> STATE WILL BE SAVED TO PRESET 12 ON EXIT
+           - TRIPPLE CLICK BUTTON 1 TO EXIT AND SAVE TO ACTUAL PRESET
+           - TRIPPLE CLICK BUTTON 2 or 3 TO EXIT WITHOUT SAVING AND RETURN TO ACTUAL PRESET 
 
     - METRONOME
-      --> HOLD BUTTON 3 THEN PRESS BUTTON 1 TO ACTIVATE
+      --> TRIPPLE LONG CLICK TO ACTIVATE (CLICK - CLICK - CLICK AND HOLD)
           -- HOLD BUTTON 2 AND 3 TO CHANGE SPEED
           -- PRESS BUTTON 1 TO EXIT
           
@@ -93,6 +102,10 @@ int gainOffset =                      0;
 int volume;
 int shape;
 int gain;
+int gainBoost =                      27;
+int volumeBoost =                    27;
+int speedVolumeboost =                7;
+int speedGainboost =                  7;
 int lastVolume;
 int lastShape;
 int lastGain;
@@ -147,6 +160,7 @@ int editState =                       0;
 int bank =                            1;
 int state =                           1;
 int oldState =                        0;
+int lastBtn =                         0;
 int timer =                           0;
 int blinker =                         0;
 int tempo =                         400;  // tempo 400 will be arround 120 bpm
@@ -228,6 +242,11 @@ void setup() {
   VolumeServo.slowmove(90,volumeSpeed);  // middle position
   ShapeServo.slowmove(shapeMax,shapeSpeed);  // end position
   GainServo.slowmove(gainMin,gainSpeed);     // start position
+// ---------------------------------------------------------------------------------------- READ BOOST VALUES
+  volumeBoost = EEPROM.read(90);
+  speedVolumeboost = EEPROM.read(91);
+  gainBoost = EEPROM.read(92);
+  speedGainboost = EEPROM.read(93);
 }
 // ----------------------------------------------------------------------------------------------------------
 // -------------------------------------------------------------------------------------------------FUNCTIONS
@@ -291,8 +310,6 @@ int freemode() {
 }
 // ------------------------------------------------------------------------------------------------ METRONOME
 int metronome() {
-  pressed[0] = 0;
-  delay (200);
   editState = 998;
   ledsOff();
   int counter = 0;
@@ -721,6 +738,20 @@ int copyPreset() {
     delay(DELAY*2);    
   }
 }
+// ------------------------------------------------------------------------------------------- RESTORE PRESET
+int restorePreset() {
+  switch (lastBtn) {
+    case 1:
+      loadBtn1();
+      break;
+    case 2:
+      loadBtn2();
+      break;
+    case 3:
+      loadBtn3();
+      break;
+  }    
+}
 // ------------------------------------------------------------------------------------ SAVE PRESET TO EEPROM
 int savePreset() {
   switch (state) {
@@ -822,6 +853,20 @@ int savePreset() {
       break;
   }
 }
+// --------------------------------------------------------------------------------------------- BOOST VOLUME
+int boostVolume() {
+  blinkAllButtons();
+  volume = constrain(volume + volumeBoost, volumeMin, volumeMax);
+  VolumeServo.slowmove(volume,speedVolumeboost);
+  ledStates();
+}
+// ----------------------------------------------------------------------------------------------- BOOST GAIN
+int boostGain() {
+  blinkAllButtons();
+  gain = constrain(gain + gainBoost, gainMin, gainMax);
+  GainServo.slowmove(gain,speedGainboost);
+  ledStates();
+}
 // ----------------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------ VOID LOOP
 // ----------------------------------------------------------------------------------------------------------
@@ -833,7 +878,7 @@ void loop() {
     if (button[i].clicks != 0) pressed[i] = button[i].clicks;
 // -------------------------------------------------------------------------------------- BUTTON1 SHORT CLICK
     if(pressed[0] == 1) {
-      if (editState > 0 && editState < 710)
+      if (editState > 0 && editState < 770)
         editState++;
 // ---------------------------------------------------------------------------------------------- NORMAL MODE
       if (editState == 0) {
@@ -995,6 +1040,30 @@ void loop() {
         ledStates();
         moveServos();
       }
+      if (editState == 751) {
+        EEPROM.write(90, volumeBoost);
+        ledsOff();
+      }
+      if (editState == 752) {
+        EEPROM.write(91, speedVolumeboost);
+        editState = 0;
+        ledStates();
+        button[0].longClickTime  = longClickTime_default;
+        button[1].longClickTime  = longClickTime_default;
+        button[2].longClickTime  = longClickTime_default;
+      }
+      if (editState == 761) {
+        EEPROM.write(92, gainBoost);
+        ledsOff();
+      }
+      if (editState == 762) {
+        EEPROM.write(93, speedGainboost);
+        editState = 0;
+        ledStates();
+        button[0].longClickTime  = longClickTime_default;
+        button[1].longClickTime  = longClickTime_default;
+        button[2].longClickTime  = longClickTime_default;
+      }
       if (editState == 900) {
         switch (bank) {
           case 1: state = 1;   break;
@@ -1085,6 +1154,12 @@ void loop() {
       pressed[2] = 0;
 //Serial.println("btn3 click released");
     }
+    if(pressed[2] == -3) {
+     metronome();
+     button[2].clicks = 0;  //will run twice without this line... BUG??
+     pressed[2] = 0;  
+   }
+
 // --------------------------------------------------------------------------------------- BUTTON1 LONG CLICK
     if(pressed[0] == -1) {
       if (editState == 0)
@@ -1146,14 +1221,15 @@ void loop() {
     }
 // --------------------------------------------------------------------------------------- BUTTON2 LONG CLICK
     if(pressed[1] == -1) {
-      if (editState == 0 || editState == 900) {
+      if (editState == 0) {
+        boostVolume();
+      }
+      if (editState == 900) {
         bank--;
         if (bank < 1)
           bank = 4;
         ledStates();
-        if (bank == 3)   //for nolags test
-          delay(500);
-      } 
+      }
 // ------------------------------------------------------------------------------------------- CLICK AND HOLD
       if (editState == 999) {
         y = easeFreemode;
@@ -1189,16 +1265,27 @@ void loop() {
    //   EEPROM.write(401, shape);
       pressed[1] = 0;
     }
+// -------------------------------------------------------------------------------- BUTTON2 DOUBLE LONG CLICK
+    if(pressed[1] == -2) {
+      if (editState == 0 || editState == 900) {
+        bank--;
+        if (bank < 1)
+          bank = 4;
+        ledStates();
+      }
+      pressed[1] = 0;  
+    }    
 // --------------------------------------------------------------------------------------- BUTTON3 LONG CLICK
     if(pressed[2] == -1) {
-      if (editState == 0 || editState == 900) {
+      if (editState == 0) {
+        boostGain();
+      } 
+      if (editState == 900) {
         bank++;
         if (bank > 4)
           bank = 1;
         ledStates();
-        if (bank == 3)   //for nolags test
-          delay(500);
-      }
+      } 
 // ------------------------------------------------------------------------------------------- CLICK AND HOLD
       if (editState == 999) {
         y = easeFreemode;
@@ -1234,6 +1321,16 @@ void loop() {
    //   EEPROM.write(402, gain);
       pressed[2] = 0;
     }
+// -------------------------------------------------------------------------------- BUTTON3 DOUBLE LONG CLICK
+    if(pressed[2] == -2) {
+      if (editState == 0 || editState == 900) {
+        bank++;
+        if (bank > 4)
+          bank = 1;
+        ledStates();
+      }
+      pressed[2] = 0;  
+    }  
 // ------------------------------------------------------------------------------------- BUTTON1 DOUBLE CLICK
     if(pressed[0] == 2) {
       if (editState == 1) {
@@ -1249,6 +1346,10 @@ void loop() {
     }
 // ------------------------------------------------------------------------------------- BUTTON2 DOUBLE CLICK
     if(pressed[1] == 2) {
+      if (editState == 1) {
+        editState = 750;
+        ledsOff();
+      }
        if (editState == 900) {
         state = oldState;
         ledStates();
@@ -1258,6 +1359,10 @@ void loop() {
     }
 // ------------------------------------------------------------------------------------- BUTTON3 DOUBLE CLICK
     if(pressed[2] == 2) {
+      if (editState == 1) {
+        editState = 760;
+        ledsOff();
+      }
       if (editState == 900) {
         state = oldState;
         ledStates();
@@ -1268,6 +1373,7 @@ void loop() {
 // ------------------------------------------------------------------------------------ BUTTON1 TRIPPLE CLICK
     if(pressed[0] == 3) {
       if (editState == 0) {
+        lastBtn = 1;
         loadBtn1();
         moveServos(); 
         freemode();
@@ -1281,16 +1387,9 @@ void loop() {
       }
       if (editState == 999) {
         ledsOff();
-        EEPROM.write(33, volume);
-        EEPROM.write(34, shape);
-        EEPROM.write(35, gain);
-        EEPROM.write(233, volumeSpeed);
-        EEPROM.write(234, shapeSpeed);
-        EEPROM.write(235, gainSpeed);
+        savePreset();
         delay(500);
         editState = 0;
-     //   state = 12;
-     //   bank = 4;
         ledStates();
         moveServos();
         button[0].longClickTime  = longClickTime_default;
@@ -1305,15 +1404,30 @@ void loop() {
 // ------------------------------------------------------------------------------------ BUTTON2 TRIPPLE CLICK
     if(pressed[1] == 3) {
       if (editState == 0) {
+        lastBtn = 2;
         loadBtn2();
         moveServos();
         freemode();            
+      }
+      if (editState == 999) {
+        ledsOff();
+        editState = 0;
+        restorePreset();
+        ledStates();
+        moveServos();
+        button[0].longClickTime  = longClickTime_default;
+        button[1].longClickTime  = longClickTime_default;
+        button[2].longClickTime  = longClickTime_default;
+        DirectionVolume = true;
+        DirectionShape = true;
+        DirectionGain = true;
       }
       pressed[1] = 0;
     }
 // ------------------------------------------------------------------------------------ BUTTON3 TRIPPLE CLICK
     if(pressed[2] == 3) {
       if (editState == 0) {
+        lastBtn = 3;
         loadBtn3();
         moveServos();
         freemode();
@@ -1321,6 +1435,19 @@ void loop() {
       if (editState == 1) {
         oldState = state;
         copyPreset();
+      }
+      if (editState == 999) {
+        ledsOff();
+        editState = 0;
+        restorePreset();
+        ledStates();
+        moveServos();
+        button[0].longClickTime  = longClickTime_default;
+        button[1].longClickTime  = longClickTime_default;
+        button[2].longClickTime  = longClickTime_default;
+        DirectionVolume = true;
+        DirectionShape = true;
+        DirectionGain = true;
       }
       pressed[2] = 0;
     }
@@ -1407,6 +1534,39 @@ void loop() {
     g = constrain(g, gainMin, gainMax);
     GainServo.slowmove(g,editSpeed);
   }
+// ---------------------------------------------------------------- SETUP BOOST VALUES - EDIT STATE 750 / 760
+// ------------------------------------------------------------------------------------------- EDIT STATE 750
+  if (editState == 750) {
+    volumeBoost = ease(volumeBoost, 1, 255, 21);   
+    indicator(volumeBoost, 5, 15, 30);
+    analogWrite(R_PIN, volumeBoost + volumeMin - 1);
+    analogWrite(G_PIN, 0);
+    analogWrite(B_PIN, 0);
+  }
+// ------------------------------------------------------------------------------------------- EDIT STATE 751
+  if (editState == 751) {
+    speedVolumeboost = ease(speedVolumeboost, 1, 255, 21);   
+    indicator(speedVolumeboost, servoSpeedsIndicator1, servoSpeedsIndicator2, servoSpeedsIndicator3);
+    analogWrite(R_PIN, speedVolumeboost);
+    analogWrite(G_PIN, speedVolumeboost);
+    analogWrite(B_PIN, 0);
+  }
+// ------------------------------------------------------------------------------------------- EDIT STATE 760
+  if (editState == 760) {
+    gainBoost = ease(gainBoost, 1, 255, 21);   
+    indicator(gainBoost, 5, 15, 30);
+    analogWrite(R_PIN, 0);
+    analogWrite(B_PIN, gainBoost + gainMin - 1);
+    analogWrite(G_PIN, 0);
+  }
+// ------------------------------------------------------------------------------------------- EDIT STATE 761
+  if (editState == 761) {
+    speedGainboost = ease(speedGainboost, 1, 255, 21);   
+    indicator(speedGainboost, servoSpeedsIndicator1, servoSpeedsIndicator2, servoSpeedsIndicator3);
+    analogWrite(R_PIN, 0);
+    analogWrite(B_PIN, speedGainboost);
+    analogWrite(G_PIN, speedGainboost);
+  }
 // ----------------------------------------------------------------------------- EDIT STATE 900 - COPY PRESET
   if (editState == 900) {
     blinkAllButtons();
@@ -1437,52 +1597,29 @@ void loop() {
        freemode();
    }
 */
-   if (button[2].depressed == true && button[0].depressed == false){
-     if (!digitalRead(buttonPin1))
-       metronome();
-   }
-// ---------------------------------------------------------------------------------------------- NO LAG TEST
-  if (!digitalRead(buttonPin1)) {
-    if (editState == 0) {
-      if (bank == 3) {
-        volume = EEPROM.read(18);
-        shape  = EEPROM.read(19);
-        gain = EEPROM.read(20);
-        volumeSpeed = EEPROM.read(218);
-        shapeSpeed = EEPROM.read(219);
-        gainSpeed = EEPROM.read(220);
-        state = 7;
-        ledStates();
-        moveServos();
-      }
-    }
-  }
+// ----------------------------------------------------------------------------------------------------------
+
+// --------------------------------------------------------------------------------------------- NO LAG EVENT
+// ------------------- ALLOW IMEDIATE BUTTON RESPONSE WHILE SWITCHING PRESETS FROM BTN3 TO BTN2 IN BANK 3 + 4 
   if (!digitalRead(buttonPin2)) {
-    if (editState == 0) {
-      if (bank == 3) {
-        volume = EEPROM.read(21);
-        shape  = EEPROM.read(22);
-        gain = EEPROM.read(23);
-        volumeSpeed = EEPROM.read(221);
-        shapeSpeed = EEPROM.read(222);
-        gainSpeed = EEPROM.read(223);
-        state = 8;
-        ledStates();
+    if (editState == 0 && bank > 2) {
+      if (state == 9 || state == 12) {
+        digitalWrite(ledPin[0], LOW);
+        digitalWrite(ledPin[1], HIGH);
+        digitalWrite(ledPin[2], LOW);
+        loadBtn2();
         moveServos();
       }
     }
   }
+// ------------------- ALLOW IMEDIATE BUTTON RESPONSE WHILE SWITCHING PRESETS FROM BTN2 TO BTN3 IN BANK 3 + 4 
   if (!digitalRead(buttonPin3)) {
-    if (editState == 0) {
-      if (bank == 3) {
-        volume = EEPROM.read(24);
-        shape  = EEPROM.read(25);
-        gain = EEPROM.read(26);
-        volumeSpeed = EEPROM.read(224);
-        shapeSpeed = EEPROM.read(225);
-        gainSpeed = EEPROM.read(226);
-        state = 9;
-        ledStates();
+    if (editState == 0 && bank > 2) {
+      if (state == 8 || state == 11) {
+        digitalWrite(ledPin[0], LOW);
+        digitalWrite(ledPin[1], LOW);
+        digitalWrite(ledPin[2], HIGH);
+        loadBtn3();
         moveServos();
       }
     }
