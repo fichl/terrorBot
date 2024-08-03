@@ -1,18 +1,9 @@
 /*
 ---------------------------------------
-|       TERRORBOT FIRMWARE v1.5       |                                                               05/2016
+|       TERRORBOT FIRMWARE v1.6       |                                                               05/2016
 ---------------------------------------
 
     TERRORBOT FOR ORANGE DARK TERROR HEAD
-     
-    copyright Michael Karsay 2013 - 2016
-    http://beam.to/terrorBot
-    
-    You may use and/or modify this code for personal use.
-    If you want to publish modified versions of this code,
-    keep the header with my name and homepage intact and give me proper credits.   
-    Feel free to contact me if you need other agreements.
-
     FEATURING:
     ----------
     
@@ -67,6 +58,14 @@
           -- PRESS BUTTON 1 TO SET SHAPE OFFSET
           -- PRESS BUTTON 1 AGAIN TO SET GAIN OFFSET
           -- PRESS BUTTON 1 AGAIN TO SAVE AND EXIT
+          
+    - SYSTEM SETTINGS
+      --> TRIPPLE CLICK BUTTON 2 WHILE IN EDITMODE 1 TO SET SYSTEM SETTINGS
+          -- SET longClickTime_default (TIME UNTIL CLICK AND HOLD BUTTON IS A LONGPRESS)
+          -- HOLD BUTTON 2 AND 3 TO CHANGE VALUE 
+          -- PRESS BUTTON 1 TO SET easeFreemode (SPEED OF THE SERVOS IN FREEMODE)
+          -- TRIPPLE PRESS BUTTON 2 HERE TO RESTORE DEFAULT VALUES AND EXIT
+          -- PRESS BUTTON 1 AGAIN TO SAVE CHANGES AND EXIT
           
     - FREEMODE
       --> TRIPPLE CLICK ON DESIRED PRESET TO OPEN IT IN FREEMODE
@@ -131,7 +130,7 @@ ClickButton button[3] = {
   ClickButton (buttonPin3, LOW, CLICKBTN_PULLUP),
 };
 int pressed[buttons]  =     { 0, 0, 0 };
-int longClickTime_default = 1720;  //longClickTime default
+long longClickTime_default = 1720;
 // ----------------------------------------------------------------------------------------------------- LEDs
 const int ledPin[buttons] = { 2, 4, 7 };    // Arduino pins to the LEDs
 const int R_PIN =                     3;
@@ -176,6 +175,19 @@ boolean DirectionGain =            true;
 // ----------------------------------------------------------------------------------------------------------
 void setup() {
   Serial.begin(9600);
+// --------------------------------------------------------------------------------------- READ SYSTEM VALUES
+  long four = EEPROM.read(100);
+  long three = EEPROM.read(101);
+  long two = EEPROM.read(102);
+  long one = EEPROM.read(103);    
+  longClickTime_default = ((four << 0) & 0xFF) + ((three << 8) & 0xFFFF) + ((two << 16) & 0xFFFFFF) + ((one << 24) & 0xFFFFFFFF);
+  easeFreemode = EEPROM.read(105);
+// ---------------------------------------------------------------------------------------- READ BOOST VALUES
+  volumeBoost = EEPROM.read(90);
+  speedVolumeboost = EEPROM.read(91);
+  gainBoost = EEPROM.read(92);
+  speedGainboost = EEPROM.read(93);
+// ----------------------------------------------------------------------------------------------------------
   for (int i=0; i<buttons; i++) {
     pinMode(ledPin[i],OUTPUT);  
     button[i].debounceTime   = 7;   // Debounce timer in ms
@@ -242,11 +254,6 @@ void setup() {
   VolumeServo.slowmove(90,volumeSpeed);  // middle position
   ShapeServo.slowmove(shapeMax,shapeSpeed);  // end position
   GainServo.slowmove(gainMin,gainSpeed);     // start position
-// ---------------------------------------------------------------------------------------- READ BOOST VALUES
-  volumeBoost = EEPROM.read(90);
-  speedVolumeboost = EEPROM.read(91);
-  gainBoost = EEPROM.read(92);
-  speedGainboost = EEPROM.read(93);
 }
 // ----------------------------------------------------------------------------------------------------------
 // -------------------------------------------------------------------------------------------------FUNCTIONS
@@ -304,9 +311,7 @@ int freemode() {
   delay(200);
   blinkButton(B_PIN);
   editState = 998;   // avoid tripple click to exit is also triggered
-  button[0].longClickTime  = 271;
-  button[1].longClickTime  = 271;
-  button[2].longClickTime  = 271;
+  setLongClickTime(271);
 }
 // ------------------------------------------------------------------------------------------------ METRONOME
 int metronome() {
@@ -371,9 +376,6 @@ int moveServos() {
   int g = gain + gainOffset;
   g = constrain(g, gainMin, gainMax);
   GainServo.slowmove(g,gainSpeed);
-//  EEPROM.write(400, volume);  // EEPROM KILLER
-//  EEPROM.write(401, shape);
-//  EEPROM.write(402, gain);
 }  
 // --------------------------------------------------------------- ACCELERATION FOR SERVO SPEEDS IN EDIT MODE
 int ease(int which, int whichmin, int whichmax, int a) {
@@ -484,6 +486,12 @@ int offsetIndicator(int which, int ledpin) {
     analogWrite(ledpin, which * 2.833333);
   }  
 }
+// ---------------------------------------------------------------- SET BUTTON_longClickTime TO DEFAULT VALUE
+int setLongClickTime(int value) {
+  button[0].longClickTime = value;
+  button[1].longClickTime = value;
+  button[2].longClickTime = value;
+}
 // ---------------------------------------------------- CHECK WHAT STATE IS SELECTED AND LIGHT THE RIGHT LEDs
 int ledStates() {
   delay (2);
@@ -568,7 +576,7 @@ int ledStates() {
     case 1: r = 0;   g = 0;   b = 0;   break;
     case 2: r = 0;   g = 10;  b = 0;   break;
     case 3: r = 0;   g = 0;   b = 20;  break;
-    case 4: r = 10;  g = 10;  b = 10;  break;
+    case 4: r = 5;  g = 5;  b = 5;  break;
   }
   analogWrite(R_PIN, r);
   analogWrite(G_PIN, g);
@@ -701,9 +709,7 @@ int loadBtn3() {
 // ---------------------------------------------------------------------------------------------- EDIT PRESET
 int edit() {
   editState = 1;
-  button[0].longClickTime  = 500;
-  button[1].longClickTime  = 500;
-  button[2].longClickTime  = 500;
+  setLongClickTime(500);
   analogWrite(R_PIN, volume - volumeMin + 1);
   analogWrite(G_PIN, 0);
   analogWrite(B_PIN, 0); 
@@ -726,9 +732,7 @@ int copyPreset() {
    timer++;
     if (timer == 400) {
       state = oldState;
-      button[0].longClickTime  = longClickTime_default;
-      button[1].longClickTime  = longClickTime_default;
-      button[2].longClickTime  = longClickTime_default;
+      setLongClickTime(longClickTime_default);
       editState = 0;
       ledStates();
       timer = 0;
@@ -878,7 +882,7 @@ void loop() {
     if (button[i].clicks != 0) pressed[i] = button[i].clicks;
 // -------------------------------------------------------------------------------------- BUTTON1 SHORT CLICK
     if(pressed[0] == 1) {
-      if (editState > 0 && editState < 770)
+      if (editState > 0 && editState < 780)
         editState++;
 // ---------------------------------------------------------------------------------------------- NORMAL MODE
       if (editState == 0) {
@@ -995,9 +999,7 @@ void loop() {
         editState = 0;
         ledStates();
         moveServos();
-        button[0].longClickTime  = longClickTime_default;
-        button[1].longClickTime  = longClickTime_default;
-        button[2].longClickTime  = longClickTime_default;
+        setLongClickTime(longClickTime_default);
         pressed [0] = 0;
         // break;
       }
@@ -1033,9 +1035,7 @@ void loop() {
           int g = gainOffset;
           EEPROM.write(99, g);
         }
-        button[0].longClickTime  = longClickTime_default;
-        button[1].longClickTime  = longClickTime_default;
-        button[2].longClickTime  = longClickTime_default;
+        setLongClickTime(longClickTime_default);
         editState = 0;
         ledStates();
         moveServos();
@@ -1048,9 +1048,7 @@ void loop() {
         EEPROM.write(91, speedVolumeboost);
         editState = 0;
         ledStates();
-        button[0].longClickTime  = longClickTime_default;
-        button[1].longClickTime  = longClickTime_default;
-        button[2].longClickTime  = longClickTime_default;
+        setLongClickTime(longClickTime_default);
       }
       if (editState == 761) {
         EEPROM.write(92, gainBoost);
@@ -1060,9 +1058,28 @@ void loop() {
         EEPROM.write(93, speedGainboost);
         editState = 0;
         ledStates();
-        button[0].longClickTime  = longClickTime_default;
-        button[1].longClickTime  = longClickTime_default;
-        button[2].longClickTime  = longClickTime_default;
+        setLongClickTime(longClickTime_default);
+      }
+      if (editState == 771) {
+        longClickTime_default = longClickTime_default * 10;
+        //Decomposition from a long to 4 bytes by using bitshift.
+        //One = Most significant -> Four = Least significant byte
+        byte four = (longClickTime_default & 0xFF);
+        byte three = ((longClickTime_default >> 8) & 0xFF);
+        byte two = ((longClickTime_default >> 16) & 0xFF);
+        byte one = ((longClickTime_default >> 24) & 0xFF);
+        //Write the 4 bytes into the eeprom memory.
+        EEPROM.write(100, four);
+        EEPROM.write(101, three);
+        EEPROM.write(102, two);
+        EEPROM.write(103, one);
+        ledsOff();
+      }
+      if (editState == 772) {
+        EEPROM.write(105, easeFreemode);
+        editState = 0;
+        ledStates();
+        setLongClickTime(longClickTime_default);
       }
       if (editState == 900) {
         switch (bank) {
@@ -1075,9 +1092,7 @@ void loop() {
         ledStates();
         moveServos();  
         editState = 0;
-        button[0].longClickTime  = longClickTime_default;
-        button[1].longClickTime  = longClickTime_default;
-        button[2].longClickTime  = longClickTime_default;
+        setLongClickTime(longClickTime_default);
       }
       if (editState == 999) {
         if (DirectionVolume == true)
@@ -1108,9 +1123,7 @@ void loop() {
         ledStates();
         moveServos();  
         editState = 0;
-        button[0].longClickTime  = longClickTime_default;
-        button[1].longClickTime  = longClickTime_default;
-        button[2].longClickTime  = longClickTime_default;
+        setLongClickTime(longClickTime_default);
       }
       if (editState == 999) {
         if (DirectionShape == true)
@@ -1141,9 +1154,7 @@ void loop() {
         ledStates();
         moveServos();  
         editState = 0;
-        button[0].longClickTime  = longClickTime_default;
-        button[1].longClickTime  = longClickTime_default;
-        button[2].longClickTime  = longClickTime_default;
+        setLongClickTime(longClickTime_default);
       }
       if (editState == 999) {
         if (DirectionGain == true) 
@@ -1216,7 +1227,6 @@ void loop() {
           ledsOff();
         }
       }     
-   //   EEPROM.write(400, volume);
       pressed[0] = 0;
     }
 // --------------------------------------------------------------------------------------- BUTTON2 LONG CLICK
@@ -1262,7 +1272,6 @@ void loop() {
           ledsOff();
         }
       }     
-   //   EEPROM.write(401, shape);
       pressed[1] = 0;
     }
 // -------------------------------------------------------------------------------- BUTTON2 DOUBLE LONG CLICK
@@ -1318,7 +1327,6 @@ void loop() {
           ledsOff();
         }
       }     
-   //   EEPROM.write(402, gain);
       pressed[2] = 0;
     }
 // -------------------------------------------------------------------------------- BUTTON3 DOUBLE LONG CLICK
@@ -1376,25 +1384,27 @@ void loop() {
         lastBtn = 1;
         loadBtn1();
         moveServos(); 
+        volume = volume + masterOffset;
+        shape = shape + shapeOffset;
+        gain = gain + gainOffset;
         freemode();
       }
       if (editState >0 && editState < 100) {
         editState = 0;
         ledStates();
-        button[0].longClickTime  = longClickTime_default;
-        button[1].longClickTime  = longClickTime_default;
-        button[2].longClickTime  = longClickTime_default;
+        setLongClickTime(longClickTime_default);
       }
       if (editState == 999) {
         ledsOff();
-        savePreset();
+        volume = volume - masterOffset;
+        shape = shape - shapeOffset;
+        gain = gain - gainOffset;
         delay(500);
+        savePreset();
         editState = 0;
         ledStates();
         moveServos();
-        button[0].longClickTime  = longClickTime_default;
-        button[1].longClickTime  = longClickTime_default;
-        button[2].longClickTime  = longClickTime_default;
+        setLongClickTime(longClickTime_default);
         DirectionVolume = true;
         DirectionShape = true;
         DirectionGain = true;
@@ -1407,7 +1417,32 @@ void loop() {
         lastBtn = 2;
         loadBtn2();
         moveServos();
+        volume = volume + masterOffset;
+        shape = shape + shapeOffset;
+        gain = gain + gainOffset;
         freemode();            
+      }
+      if (editState == 1) {
+        editState = 770;
+        longClickTime_default = longClickTime_default / 10;
+        ledsOff();        
+      }
+      if (editState > 770 && editState < 774) {
+        longClickTime_default = 1720;
+        easeFreemode = 35;
+        byte four = (longClickTime_default & 0xFF);
+        byte three = ((longClickTime_default >> 8) & 0xFF);
+        byte two = ((longClickTime_default >> 16) & 0xFF);
+        byte one = ((longClickTime_default >> 24) & 0xFF);
+        //Write the 4 bytes into the eeprom memory.
+        EEPROM.write(100, four);
+        EEPROM.write(101, three);
+        EEPROM.write(102, two);
+        EEPROM.write(103, one);
+        EEPROM.write(105, easeFreemode);
+        editState = 0;
+        ledStates();
+        setLongClickTime(longClickTime_default);        
       }
       if (editState == 999) {
         ledsOff();
@@ -1415,9 +1450,7 @@ void loop() {
         restorePreset();
         ledStates();
         moveServos();
-        button[0].longClickTime  = longClickTime_default;
-        button[1].longClickTime  = longClickTime_default;
-        button[2].longClickTime  = longClickTime_default;
+        setLongClickTime(longClickTime_default);
         DirectionVolume = true;
         DirectionShape = true;
         DirectionGain = true;
@@ -1430,9 +1463,13 @@ void loop() {
         lastBtn = 3;
         loadBtn3();
         moveServos();
+        volume = volume + masterOffset;
+        shape = shape + shapeOffset;
+        gain = gain + gainOffset;
         freemode();
       }
       if (editState == 1) {
+        ledStates();
         oldState = state;
         copyPreset();
       }
@@ -1442,9 +1479,7 @@ void loop() {
         restorePreset();
         ledStates();
         moveServos();
-        button[0].longClickTime  = longClickTime_default;
-        button[1].longClickTime  = longClickTime_default;
-        button[2].longClickTime  = longClickTime_default;
+        setLongClickTime(longClickTime_default);
         DirectionVolume = true;
         DirectionShape = true;
         DirectionGain = true;
@@ -1566,6 +1601,27 @@ void loop() {
     analogWrite(R_PIN, 0);
     analogWrite(B_PIN, speedGainboost);
     analogWrite(G_PIN, speedGainboost);
+  }
+// --------------------------------------------------------------- SETUP SYSTEM VALUES - EDIT STATE 770 / 771
+// ------------------------------------------------------------------------------------------- EDIT STATE 770
+  if (editState == 770) {
+    longClickTime_default = ease(longClickTime_default, 20, 220, 8);   
+    indicator(longClickTime_default, 100, 140, 172);
+    analogWrite(R_PIN, 0);
+    analogWrite(G_PIN, longClickTime_default);
+    analogWrite(B_PIN, longClickTime_default);
+//    Serial.print("longClickTime_default :");
+//    Serial.println(longClickTime_default);
+  }
+// ------------------------------------------------------------------------------------------- EDIT STATE 771
+  if (editState == 771) {
+    easeFreemode = ease(easeFreemode, 1, 255, 21);   
+    indicator(easeFreemode, 10, 35, 60);
+    analogWrite(R_PIN, 0);
+    analogWrite(G_PIN, easeFreemode);
+    analogWrite(B_PIN, 0);
+//    Serial.print("easeFreemode :");
+//    Serial.println(easeFreemode);
   }
 // ----------------------------------------------------------------------------- EDIT STATE 900 - COPY PRESET
   if (editState == 900) {
